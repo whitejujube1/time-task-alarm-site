@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>public/manifest.webmanifest - 网站源码 HTML 导出</title>
+    <style>
+:root {
+  --bg: #f3f7f6;
+  --card: #ffffff;
+  --border: #cfe0dc;
+  --text: #10201d;
+  --muted: #536964;
+  --accent: #0f766e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eefbf7, #f4f7f6 40%, #edf4f2 100%);
+  color: var(--text);
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+main {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+h1, h2, p { margin-top: 0; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 12px 30px rgba(16, 32, 29, 0.06);
+}
+.list {
+  display: grid;
+  gap: 12px;
+}
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  background: #fbfdfc;
+}
+.item:hover { border-color: var(--accent); }
+.meta { color: var(--muted); font-size: 14px; }
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+small { color: var(--muted); }
+@media (max-width: 720px) {
+  .topbar, .item { display: block; }
+  .item span:last-child { margin-top: 8px; display: block; }
+}
+</style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <a class="back" href="index.html">返回源码目录</a>
+          <h1>public/manifest.webmanifest</h1>
+          <small>大小：446 字节</small>
+        </div>
+      </div>
+      <section class="card">
+        <pre>{
+  &quot;name&quot;: &quot;时间安排与闹钟助手&quot;,
+  &quot;short_name&quot;: &quot;闹钟助手&quot;,
+  &quot;description&quot;: &quot;上传文件、图片、PDF 或 Word，自动提取时间安排并生成提醒。&quot;,
+  &quot;start_url&quot;: &quot;/&quot;,
+  &quot;display&quot;: &quot;standalone&quot;,
+  &quot;background_color&quot;: &quot;#f4efe6&quot;,
+  &quot;theme_color&quot;: &quot;#d6693f&quot;,
+  &quot;lang&quot;: &quot;zh-CN&quot;,
+  &quot;icons&quot;: [
+    {
+      &quot;src&quot;: &quot;/icon.svg&quot;,
+      &quot;sizes&quot;: &quot;any&quot;,
+      &quot;type&quot;: &quot;image/svg+xml&quot;,
+      &quot;purpose&quot;: &quot;any maskable&quot;
+    }
+  ]
+}
+</pre>
+      </section>
+    </main>
+  </body>
+</html>

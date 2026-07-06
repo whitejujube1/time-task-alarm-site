@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>public/app.js - 网站源码 HTML 导出</title>
+    <style>
+:root {
+  --bg: #f3f7f6;
+  --card: #ffffff;
+  --border: #cfe0dc;
+  --text: #10201d;
+  --muted: #536964;
+  --accent: #0f766e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eefbf7, #f4f7f6 40%, #edf4f2 100%);
+  color: var(--text);
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+main {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+h1, h2, p { margin-top: 0; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 12px 30px rgba(16, 32, 29, 0.06);
+}
+.list {
+  display: grid;
+  gap: 12px;
+}
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  background: #fbfdfc;
+}
+.item:hover { border-color: var(--accent); }
+.meta { color: var(--muted); font-size: 14px; }
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+small { color: var(--muted); }
+@media (max-width: 720px) {
+  .topbar, .item { display: block; }
+  .item span:last-child { margin-top: 8px; display: block; }
+}
+</style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <a class="back" href="index.html">返回源码目录</a>
+          <h1>public/app.js</h1>
+          <small>大小：6879 字节</small>
+        </div>
+      </div>
+      <section class="card">
+        <pre>window.__APP_BOOTED__ = false;
+
+const elements = {
+  notifyBtn: document.getElementById(&quot;notify-btn&quot;),
+  parseBtn: document.getElementById(&quot;parse-btn&quot;),
+  createAlarmsBtn: document.getElementById(&quot;create-alarms-btn&quot;),
+  fileInput: document.getElementById(&quot;file-input&quot;),
+  cameraInput: document.getElementById(&quot;camera-input&quot;),
+  textInput: document.getElementById(&quot;text-input&quot;),
+  fileList: document.getElementById(&quot;file-list&quot;),
+  status: document.getElementById(&quot;status&quot;),
+  permissionTip: document.getElementById(&quot;permission-tip&quot;),
+  recordMeta: document.getElementById(&quot;record-meta&quot;),
+  scheduleList: document.getElementById(&quot;schedule-list&quot;),
+  extractedText: document.getElementById(&quot;extracted-text&quot;),
+  alarmList: document.getElementById(&quot;alarm-list&quot;),
+  toast: document.getElementById(&quot;toast&quot;),
+};
+
+const state = {
+  selectedFiles: [],
+  currentItems: [],
+  currentRecordId: null,
+  alarms: [],
+  toastTimer: null,
+};
+
+function setStatus(message) {
+  elements.status.textContent = message;
+}
+
+function showToast(message) {
+  clearTimeout(state.toastTimer);
+  elements.toast.textContent = message;
+  elements.toast.classList.remove(&quot;hidden&quot;);
+  state.toastTimer = setTimeout(() =&gt; {
+    elements.toast.classList.add(&quot;hidden&quot;);
+  }, 2200);
+}
+
+function renderFiles() {
+  if (!state.selectedFiles.length) {
+    elements.fileList.textContent = &quot;当前没有选择文件。&quot;;
+    return;
+  }
+
+  elements.fileList.innerHTML = state.selectedFiles
+    .map((file) =&gt; `• ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`)
+    .join(&quot;&lt;br&gt;&quot;);
+}
+
+function collectFiles() {
+  const files = [
+    ...Array.from(elements.fileInput.files || []),
+    ...Array.from(elements.cameraInput.files || []),
+  ];
+  state.selectedFiles = files;
+  renderFiles();
+}
+
+function renderItems() {
+  if (!state.currentItems.length) {
+    elements.scheduleList.textContent = &quot;还没有识别结果。&quot;;
+    return;
+  }
+
+  elements.scheduleList.innerHTML = state.currentItems
+    .map(
+      (item, index) =&gt;
+        `${index + 1}. ${item.datetime} | ${item.title} | 提前 ${item.reminderMinutesBefore} 分钟`
+    )
+    .join(&quot;&lt;br&gt;&quot;)
+    .replaceAll(&quot;&lt;&quot;, &quot;&amp;lt;&quot;);
+}
+
+function renderAlarms() {
+  if (!state.alarms.length) {
+    elements.alarmList.textContent = &quot;还没有闹钟。&quot;;
+    return;
+  }
+
+  elements.alarmList.innerHTML = state.alarms
+    .map(
+      (alarm, index) =&gt;
+        `${index + 1}. ${alarm.title} | 状态: ${alarm.status} | 提醒时间: ${alarm.remindAt}`
+    )
+    .join(&quot;&lt;br&gt;&quot;)
+    .replaceAll(&quot;&lt;&quot;, &quot;&amp;lt;&quot;);
+}
+
+async function loadBootstrap() {
+  const response = await fetch(&quot;/api/bootstrap&quot;);
+  const data = await response.json();
+  state.alarms = data.alarms || [];
+  renderAlarms();
+}
+
+async function handleNotify() {
+  showToast(&quot;按钮已点击&quot;);
+  setStatus(&quot;你点击了：开启提醒权限&quot;);
+
+  if (!(&quot;Notification&quot; in window)) {
+    elements.permissionTip.textContent = &quot;当前浏览器不支持 Notification API。&quot;;
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  elements.permissionTip.textContent = `通知权限结果：${permission}`;
+  setStatus(`权限处理完成：${permission}`);
+}
+
+async function handleParse() {
+  showToast(&quot;开始识别&quot;);
+  setStatus(&quot;你点击了：开始识别时间安排&quot;);
+  elements.parseBtn.disabled = true;
+  elements.parseBtn.textContent = &quot;正在识别...&quot;;
+
+  try {
+    collectFiles();
+    const text = elements.textInput.value.trim();
+    if (!state.selectedFiles.length &amp;&amp; !text) {
+      throw new Error(&quot;请先上传文件、拍照或粘贴文本。&quot;);
+    }
+
+    const formData = new FormData();
+    state.selectedFiles.forEach((file) =&gt; formData.append(&quot;files&quot;, file));
+    if (text) {
+      formData.append(&quot;text&quot;, text);
+    }
+
+    const response = await fetch(&quot;/api/parse&quot;, {
+      method: &quot;POST&quot;,
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || &quot;解析失败&quot;);
+    }
+
+    state.currentRecordId = data.record.id;
+    state.currentItems = data.record.items || [];
+    elements.recordMeta.textContent = `记录ID: ${data.record.id}；识别条数: ${state.currentItems.length}`;
+    elements.extractedText.textContent = data.record.extractedText || &quot;&quot;;
+    renderItems();
+    setStatus(`识别完成，共识别 ${state.currentItems.length} 条时间安排`);
+    showToast(&quot;识别完成&quot;);
+  } catch (error) {
+    setStatus(`识别失败：${error.message}`);
+  } finally {
+    elements.parseBtn.disabled = false;
+    elements.parseBtn.textContent = &quot;2. 开始识别时间安排&quot;;
+  }
+}
+
+async function handleCreateAlarms() {
+  showToast(&quot;开始保存闹钟&quot;);
+  setStatus(&quot;你点击了：保存全部闹钟&quot;);
+  elements.createAlarmsBtn.disabled = true;
+  elements.createAlarmsBtn.textContent = &quot;正在保存...&quot;;
+
+  try {
+    if (!state.currentItems.length) {
+      throw new Error(&quot;当前没有识别结果，不能创建闹钟。&quot;);
+    }
+
+    const response = await fetch(&quot;/api/alarms/bulk&quot;, {
+      method: &quot;POST&quot;,
+      headers: {
+        &quot;Content-Type&quot;: &quot;application/json&quot;,
+      },
+      body: JSON.stringify({ items: state.currentItems }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || &quot;保存闹钟失败&quot;);
+    }
+
+    state.alarms = data.alarms || [];
+    renderAlarms();
+    setStatus(`保存完成，当前共有 ${state.alarms.length} 条闹钟`);
+    showToast(&quot;闹钟已保存&quot;);
+  } catch (error) {
+    setStatus(`保存失败：${error.message}`);
+  } finally {
+    elements.createAlarmsBtn.disabled = false;
+    elements.createAlarmsBtn.textContent = &quot;3. 保存全部闹钟&quot;;
+  }
+}
+
+function bind() {
+  elements.notifyBtn.addEventListener(&quot;click&quot;, () =&gt; {
+    handleNotify().catch((error) =&gt; {
+      setStatus(`权限处理异常：${error.message}`);
+    });
+  });
+
+  elements.parseBtn.addEventListener(&quot;click&quot;, () =&gt; {
+    handleParse().catch((error) =&gt; {
+      setStatus(`识别异常：${error.message}`);
+    });
+  });
+
+  elements.createAlarmsBtn.addEventListener(&quot;click&quot;, () =&gt; {
+    handleCreateAlarms().catch((error) =&gt; {
+      setStatus(`保存异常：${error.message}`);
+    });
+  });
+
+  elements.fileInput.addEventListener(&quot;change&quot;, () =&gt; {
+    collectFiles();
+    setStatus(&quot;文件选择完成，可以开始识别。&quot;);
+  });
+
+  elements.cameraInput.addEventListener(&quot;change&quot;, () =&gt; {
+    collectFiles();
+    setStatus(&quot;拍照文件选择完成，可以开始识别。&quot;);
+  });
+}
+
+async function init() {
+  bind();
+  await loadBootstrap();
+  window.__APP_BOOTED__ = true;
+  setStatus(&quot;页面脚本已加载。现在点击任意按钮都应该有反应。&quot;);
+  elements.permissionTip.textContent = &quot;如果按钮仍然无响应，说明浏览器没有执行这份新脚本。&quot;;
+  showToast(&quot;调试版已加载&quot;);
+}
+
+init().catch((error) =&gt; {
+  setStatus(`初始化失败：${error.message}`);
+});
+</pre>
+      </section>
+    </main>
+  </body>
+</html>

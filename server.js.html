@@ -1,0 +1,1643 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>server.js - 网站源码 HTML 导出</title>
+    <style>
+:root {
+  --bg: #f3f7f6;
+  --card: #ffffff;
+  --border: #cfe0dc;
+  --text: #10201d;
+  --muted: #536964;
+  --accent: #0f766e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eefbf7, #f4f7f6 40%, #edf4f2 100%);
+  color: var(--text);
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+main {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+h1, h2, p { margin-top: 0; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 12px 30px rgba(16, 32, 29, 0.06);
+}
+.list {
+  display: grid;
+  gap: 12px;
+}
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  background: #fbfdfc;
+}
+.item:hover { border-color: var(--accent); }
+.meta { color: var(--muted); font-size: 14px; }
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+small { color: var(--muted); }
+@media (max-width: 720px) {
+  .topbar, .item { display: block; }
+  .item span:last-child { margin-top: 8px; display: block; }
+}
+</style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <a class="back" href="index.html">返回源码目录</a>
+          <h1>server.js</h1>
+          <small>大小：45735 字节</small>
+        </div>
+      </div>
+      <section class="card">
+        <pre>const express = require(&quot;express&quot;);
+const multer = require(&quot;multer&quot;);
+const path = require(&quot;path&quot;);
+const fs = require(&quot;fs/promises&quot;);
+const fsSync = require(&quot;fs&quot;);
+const Tesseract = require(&quot;tesseract.js&quot;);
+const { PDFParse } = require(&quot;pdf-parse&quot;);
+const mammoth = require(&quot;mammoth&quot;);
+const WordExtractor = require(&quot;word-extractor&quot;);
+const XLSX = require(&quot;xlsx&quot;);
+
+const app = express();
+const port = process.env.PORT || 3000;
+const appVersion = &quot;calendar-flow-restored-2026-06-23-01&quot;;
+const wordExtractor = new WordExtractor();
+const dataRoot = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(__dirname, &quot;data&quot;);
+
+const baseDir = __dirname;
+const publicDir = path.join(baseDir, &quot;public&quot;);
+const uploadDir = path.join(baseDir, &quot;uploads&quot;);
+const dataDir = dataRoot;
+const alarmsFile = path.join(dataDir, &quot;alarms.json&quot;);
+const recordsFile = path.join(dataDir, &quot;records.json&quot;);
+
+for (const dir of [uploadDir, dataDir]) {
+  if (!fsSync.existsSync(dir)) {
+    fsSync.mkdirSync(dir, { recursive: true });
+  }
+}
+
+const upload = multer({
+  dest: uploadDir,
+  limits: {
+    fileSize: 20 * 1024 * 1024,
+    files: 20,
+  },
+});
+
+let alarms = [];
+let records = [];
+const calendarFiles = new Map();
+const sseClients = new Set();
+
+app.use(express.json({ limit: &quot;2mb&quot; }));
+app.use(express.urlencoded({ extended: true, limit: &quot;2mb&quot; }));
+app.use((req, res, next) =&gt; {
+  if (
+    req.path === &quot;/&quot; ||
+    req.path.endsWith(&quot;.js&quot;) ||
+    req.path.endsWith(&quot;.css&quot;) ||
+    req.path.endsWith(&quot;.html&quot;) ||
+    req.path.endsWith(&quot;.webmanifest&quot;) ||
+    req.path.endsWith(&quot;sw.js&quot;)
+  ) {
+    res.setHeader(&quot;Cache-Control&quot;, &quot;no-store&quot;);
+  }
+  next();
+});
+app.use(express.static(publicDir));
+
+app.get(&quot;/healthz&quot;, (req, res) =&gt; {
+  res.json({
+    ok: true,
+    version: appVersion,
+    time: new Date().toISOString(),
+  });
+});
+
+app.use((req, res, next) =&gt; {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+function pad(value) {
+  return String(value).padStart(2, &quot;0&quot;);
+}
+
+function createId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function countCjk(value) {
+  return (String(value).match(/[\u4e00-\u9fff]/g) || []).length;
+}
+
+function normalizeUploadedFileName(name) {
+  const original = String(name || &quot;&quot;);
+  const decoded = Buffer.from(original, &quot;latin1&quot;).toString(&quot;utf8&quot;);
+  if (countCjk(decoded) &gt; countCjk(original)) {
+    return decoded;
+  }
+  return original;
+}
+
+function toIsoLocal(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromIsoLocal(value) {
+  const matched = String(value).match(
+    /^(?&lt;year&gt;\d{4})-(?&lt;month&gt;\d{2})-(?&lt;day&gt;\d{2})T(?&lt;hour&gt;\d{2}):(?&lt;minute&gt;\d{2})$/
+  );
+
+  if (!matched) {
+    return new Date(value);
+  }
+
+  const { year, month, day, hour, minute } = matched.groups;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0,
+    0
+  );
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+async function readJson(filePath, fallback) {
+  if (!fsSync.existsSync(filePath)) {
+    return clone(fallback);
+  }
+
+  try {
+    const content = await fs.readFile(filePath, &quot;utf8&quot;);
+    return JSON.parse(content);
+  } catch {
+    return clone(fallback);
+  }
+}
+
+async function writeJson(filePath, value) {
+  await fs.writeFile(filePath, JSON.stringify(value, null, 2), &quot;utf8&quot;);
+}
+
+function emitEvent(type, payload) {
+  const data = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const client of sseClients) {
+    client.write(data);
+  }
+}
+
+function weekdayOffset(targetDay) {
+  const today = new Date().getDay();
+  const normalizedToday = today === 0 ? 7 : today;
+  const offset = targetDay - normalizedToday;
+  return offset &gt;= 0 ? offset : offset + 7;
+}
+
+function parseWeekdayDate(line, baseDate) {
+  const weekdayMatch = line.match(/(?:周|星期)([一二三四五六日天])/);
+  if (!weekdayMatch) {
+    return null;
+  }
+
+  const map = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    日: 7,
+    天: 7,
+  };
+
+  const timeMatch = line.match(/(上午|中午|下午|晚上)?\s*(\d{1,2})(?:[:：点时](\d{1,2}))?/);
+  if (!timeMatch) {
+    return null;
+  }
+
+  let hour = Number(timeMatch[2]);
+  const minute = Number(timeMatch[3] || 0);
+  const period = timeMatch[1] || &quot;&quot;;
+  if ((period === &quot;下午&quot; || period === &quot;晚上&quot;) &amp;&amp; hour &lt; 12) {
+    hour += 12;
+  }
+
+  const next = new Date(baseDate);
+  next.setDate(next.getDate() + weekdayOffset(map[weekdayMatch[1]]));
+  next.setHours(hour, minute, 0, 0);
+  return next;
+}
+
+function parseRelativeDate(line, baseDate) {
+  const timeMatch = line.match(/(上午|中午|下午|晚上)?\s*(\d{1,2})(?:[:：点时](\d{1,2}))?/);
+  if (!timeMatch) {
+    return null;
+  }
+
+  let hour = Number(timeMatch[2]);
+  const minute = Number(timeMatch[3] || 0);
+  const period = timeMatch[1] || &quot;&quot;;
+  if ((period === &quot;下午&quot; || period === &quot;晚上&quot;) &amp;&amp; hour &lt; 12) {
+    hour += 12;
+  }
+
+  const date = new Date(baseDate);
+  if (line.includes(&quot;后天&quot;)) {
+    date.setDate(date.getDate() + 2);
+  } else if (line.includes(&quot;明天&quot;)) {
+    date.setDate(date.getDate() + 1);
+  }
+  date.setHours(hour, minute, 0, 0);
+  return date;
+}
+
+function parseAbsoluteDate(line, baseDate) {
+  const patterns = [
+    /(?:(\d{4})年\s*)?(\d{1,2})月\s*(\d{1,2})[日号]?\s*(?:\((?:周|星期)[一二三四五六日天]\))?\s*(上午|中午|下午|晚上)?\s*(\d{1,2})(?:[:：](\d{1,2})|[点时](\d{1,2})?分?)/,
+    /(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})/,
+    /(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2})/,
+  ];
+
+  for (const pattern of patterns) {
+    const matched = line.match(pattern);
+    if (!matched) {
+      continue;
+    }
+
+    if (pattern === patterns[1] || pattern === patterns[2]) {
+      const date = new Date(
+        Number(matched[1]),
+        Number(matched[2]) - 1,
+        Number(matched[3]),
+        Number(matched[4]),
+        Number(matched[5]),
+        0,
+        0
+      );
+      if (isValidDateTime(date, matched[1], matched[2], matched[3], matched[4], matched[5])) {
+        return { date, matchedText: matched[0] };
+      }
+      continue;
+    }
+
+    const year = matched[1] ? Number(matched[1]) : baseDate.getFullYear();
+    const month = Number(matched[2]) - 1;
+    const day = Number(matched[3]);
+    const period = matched[4] || &quot;&quot;;
+    let hour = Number(matched[5]);
+    const minute = Number(matched[6] || matched[7] || 0);
+
+    if ((period === &quot;下午&quot; || period === &quot;晚上&quot;) &amp;&amp; hour &lt; 12) {
+      hour += 12;
+    }
+
+    const date = new Date(year, month, day, hour, minute, 0, 0);
+    if (isValidDateTime(date, year, month + 1, day, hour, minute)) {
+      return { date, matchedText: matched[0] };
+    }
+  }
+
+  return null;
+}
+
+function isValidDateTime(date, year, month, day, hour, minute) {
+  return (
+    !Number.isNaN(date.getTime()) &amp;&amp;
+    date.getFullYear() === Number(year) &amp;&amp;
+    date.getMonth() + 1 === Number(month) &amp;&amp;
+    date.getDate() === Number(day) &amp;&amp;
+    date.getHours() === Number(hour) &amp;&amp;
+    date.getMinutes() === Number(minute)
+  );
+}
+
+function isValidDateOnly(date, year, month, day) {
+  return (
+    !Number.isNaN(date.getTime()) &amp;&amp;
+    date.getFullYear() === Number(year) &amp;&amp;
+    date.getMonth() + 1 === Number(month) &amp;&amp;
+    date.getDate() === Number(day)
+  );
+}
+
+function hasScheduleKeyword(line) {
+  return /(截止|递交|提交|报价截止|报名|开标|投标截止|响应截止|付款|支付|工期|合同签订|合同时间|合同截止时间|验收|初验|终验|试运行|质保|服务周期|完成|办理|到期|提醒|会议|评审|考试|预约|巡检|维修|维保|meeting|deadline|submit|review|exam|appointment)/i.test(line);
+}
+
+function isNoiseLine(line) {
+  if (/(合同|截止|到期|巡检|维修|维保|服务周期)/.test(line)) {
+    return false;
+  }
+
+  return (
+    /￥|人民币|总计|小写|大写|单价|总价|合价|报价一览表/.test(line) ||
+    /电压|电流|温度|湿度|电池|容量|功率|风量|冷量|Hz|V|kW|kg|mm|℃|RH|m3|Pa|Ah|ms|h后/.test(line)
+  );
+}
+
+function parseDateOnly(line, baseDate) {
+  if (!hasScheduleKeyword(line) || isNoiseLine(line)) {
+    return null;
+  }
+
+  const patterns = [
+    /(?:(\d{4})年)?\s*(\d{1,2})月\s*(\d{1,2})[日号]?/,
+    /(\d{4})-(\d{1,2})-(\d{1,2})/,
+    /(\d{4})\/(\d{1,2})\/(\d{1,2})/,
+  ];
+
+  for (const pattern of patterns) {
+    const matched = line.match(pattern);
+    if (!matched) {
+      continue;
+    }
+
+    const year = matched[1] ? Number(matched[1]) : baseDate.getFullYear();
+    const month = Number(matched[2]) - 1;
+    const day = Number(matched[3]);
+    const hour = /(截止|递交|提交|报价|报名|前|之前|以内|内)/.test(line) ? 18 : 9;
+    const date = new Date(year, month, day, hour, 0, 0, 0);
+    if (isValidDateOnly(date, year, month + 1, day)) {
+      return { date, matchedText: matched[0] };
+    }
+  }
+
+  return null;
+}
+
+function lastDayOfMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+function parseYearMonthValue(value, baseDate) {
+  const rangeMatched = String(value).match(
+    /(?:(\d{4})年\s*)?(\d{1,2})月\s*[-至到~—－]\s*(?:(\d{4})年\s*)?(\d{1,2})月/
+  );
+  if (rangeMatched) {
+    const startYear = rangeMatched[1] ? Number(rangeMatched[1]) : baseDate.getFullYear();
+    const year = rangeMatched[3] ? Number(rangeMatched[3]) : startYear;
+    const month = Number(rangeMatched[4]);
+    return { year, month, matchedText: rangeMatched[0] };
+  }
+
+  const matched = String(value).match(/(?:(\d{4})年\s*)?(\d{1,2})月/);
+  if (!matched) {
+    return null;
+  }
+
+  return {
+    year: matched[1] ? Number(matched[1]) : baseDate.getFullYear(),
+    month: Number(matched[2]),
+    matchedText: matched[0],
+  };
+}
+
+function parseMonthOnly(line, baseDate) {
+  if (!hasScheduleKeyword(line) || isNoiseLine(line)) {
+    return null;
+  }
+
+  const fieldMatches = Array.from(
+    String(line).matchAll(/([^|：:]{0,12}(?:合同截止时间|截止时间|到期时间|维修时间|巡检时间|合同时间|服务周期)[^|：:]*)[：:]\s*([^|]+)/g)
+  );
+  const fieldPriority = [&quot;合同截止时间&quot;, &quot;截止时间&quot;, &quot;到期时间&quot;, &quot;维修时间&quot;, &quot;巡检时间&quot;, &quot;合同时间&quot;, &quot;服务周期&quot;];
+
+  const candidates = fieldMatches
+    .map((matched) =&gt; {
+      const field = matched[1];
+      const parsed = parseYearMonthValue(matched[2], baseDate);
+      if (!parsed) {
+        return null;
+      }
+      const priority = fieldPriority.findIndex((key) =&gt; field.includes(key));
+      return {
+        ...parsed,
+        priority: priority === -1 ? fieldPriority.length : priority,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) =&gt; a.priority - b.priority);
+
+  const parsed = candidates[0] || parseYearMonthValue(line, baseDate);
+  if (!parsed) {
+    return null;
+  }
+
+  const day = lastDayOfMonth(parsed.year, parsed.month);
+  const date = new Date(parsed.year, parsed.month - 1, day, 18, 0, 0, 0);
+  if (!isValidDateOnly(date, parsed.year, parsed.month, day)) {
+    return null;
+  }
+
+  return {
+    date,
+    matchedText: parsed.matchedText,
+    titlePrefix: &quot;月份日期（原文只写到月份，默认该月最后一天18:00）：&quot;,
+  };
+}
+
+function addBusinessDays(date, days) {
+  const next = new Date(date);
+  let remaining = days;
+  while (remaining &gt; 0) {
+    next.setDate(next.getDate() + 1);
+    const day = next.getDay();
+    if (day !== 0 &amp;&amp; day !== 6) {
+      remaining -= 1;
+    }
+  }
+  return next;
+}
+
+function parseRelativeDeadline(line, baseDate) {
+  const trialMatched = line.match(/(\d{1,3})\s*个?\s*(工作日|日|天|个月|月|年).*?后/);
+  const matched = line.match(/后\s*(\d{1,3})\s*个?\s*(工作日|日|天|个月|月|年)内?/);
+  const candidate =
+    /试运行|质保|运维|服务周期/.test(line) &amp;&amp; trialMatched ? trialMatched : matched;
+
+  if (!candidate || !/(完成|支付|启动|提交|递交|办理|验收|付款|试运行|工期|质保|运维|服务周期)/.test(line)) {
+    return null;
+  }
+
+  const amount = Number(candidate[1]);
+  const unit = candidate[2];
+  const date = new Date(baseDate);
+
+  if (unit === &quot;工作日&quot;) {
+    const next = addBusinessDays(date, amount);
+    date.setTime(next.getTime());
+  } else if (unit === &quot;日&quot; || unit === &quot;天&quot;) {
+    date.setDate(date.getDate() + amount);
+  } else if (unit === &quot;个月&quot; || unit === &quot;月&quot;) {
+    date.setMonth(date.getMonth() + amount);
+  } else if (unit === &quot;年&quot;) {
+    date.setFullYear(date.getFullYear() + amount);
+  }
+
+  date.setHours(18, 0, 0, 0);
+  return {
+    date,
+    matchedText: candidate[0],
+    titlePrefix: &quot;相对期限（按今天估算；原文未写具体时间，默认18:00；需确认起算日期）：&quot;,
+  };
+}
+
+function normalizeTitle(line, matchedText) {
+  return line
+    .replace(matchedText, &quot;&quot;)
+    .replace(/(?:^|\s*\|\s*)[^|：:]+[：:]\s*(?=\||$)/g, &quot; | &quot;)
+    .replace(/\s*\|\s*/g, &quot; | &quot;)
+    .replace(/(?:\|\s*){2,}/g, &quot;| &quot;)
+    .replace(/^\s*\|\s*|\s*\|\s*$/g, &quot;&quot;)
+    .replace(/^[\-\d.\s、]+/, &quot;&quot;)
+    .replace(/[：:]\s*$/, &quot;&quot;)
+    .trim() || &quot;未命名待办&quot;;
+}
+
+function extractScheduleItems(text) {
+  const rawLines = text
+    .split(/\r?\n/)
+    .map((line) =&gt; line.trim())
+    .filter(Boolean);
+  const lines = rawLines.map((line, index) =&gt; {
+    const previous = rawLines[index - 1] || &quot;&quot;;
+    const next = rawLines[index + 1] || &quot;&quot;;
+    return {
+      original: line,
+      context: [previous, line, next].filter(Boolean).join(&quot; &quot;),
+    };
+  });
+
+  const baseDate = new Date();
+  baseDate.setSeconds(0, 0);
+
+  const items = [];
+
+  for (const entry of lines) {
+    const line = entry.original;
+    const contextLine = entry.context;
+    const lineHasDate =
+      /(?:(?:\d{4}年\s*)?\d{1,2}月(?:\s*\d{1,2}[日号]?)?)|(?:\d{4}[-/]\d{1,2}[-/]\d{1,2})/.test(line);
+    const lineHasDateTime =
+      /(?:(?:\d{4}年\s*)?\d{1,2}月\s*\d{1,2}[日号]?.{0,12}\d{1,2}(?:[:：点时]\d{1,2})?)|(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2})/.test(line);
+    const shouldParseFreely = /(今天|明天|后天|周|星期)/.test(line);
+    const shouldParseByKeyword = hasScheduleKeyword(contextLine) &amp;&amp; !isNoiseLine(contextLine);
+    if (!lineHasDate &amp;&amp; !shouldParseFreely &amp;&amp; !shouldParseByKeyword) {
+      continue;
+    }
+
+    let parsed = parseAbsoluteDate(line, baseDate);
+    let date = parsed ? parsed.date : null;
+    let matchedText = parsed ? parsed.matchedText : &quot;&quot;;
+    let titlePrefix = parsed ? parsed.titlePrefix || &quot;&quot; : &quot;&quot;;
+
+    if (!date) {
+      parsed = parseDateOnly(line, baseDate);
+      date = parsed ? parsed.date : null;
+      matchedText = parsed ? parsed.matchedText : &quot;&quot;;
+      titlePrefix = parsed ? parsed.titlePrefix || &quot;&quot; : &quot;&quot;;
+    }
+
+    if (!date) {
+      parsed = parseMonthOnly(line, baseDate);
+      date = parsed ? parsed.date : null;
+      matchedText = parsed ? parsed.matchedText : &quot;&quot;;
+      titlePrefix = parsed ? parsed.titlePrefix || &quot;&quot; : &quot;&quot;;
+    }
+
+    if (!date &amp;&amp; /(今天|明天|后天)/.test(line)) {
+      date = parseRelativeDate(line, baseDate);
+      matchedText =
+        line.match(
+          /(今天|明天|后天)\s*(上午|中午|下午|晚上)?\s*\d{1,2}(?:[:：点时]\d{1,2})?/
+        )?.[0] || &quot;&quot;;
+    }
+
+    if (!date &amp;&amp; /(?:周|星期)[一二三四五六日天]/.test(line)) {
+      date = parseWeekdayDate(line, baseDate);
+      matchedText =
+        line.match(
+          /(?:周|星期)[一二三四五六日天]\s*(上午|中午|下午|晚上)?\s*\d{1,2}(?:[:：点时]\d{1,2})?/
+        )?.[0] || &quot;&quot;;
+    }
+
+    if (!date) {
+      parsed = parseRelativeDeadline(line, baseDate);
+      date = parsed ? parsed.date : null;
+      matchedText = parsed ? parsed.matchedText : &quot;&quot;;
+      titlePrefix = parsed ? parsed.titlePrefix || &quot;&quot; : &quot;&quot;;
+    }
+
+    if (!date || Number.isNaN(date.getTime())) {
+      continue;
+    }
+
+    items.push({
+      id: createId(&quot;item&quot;),
+      datetime: toIsoLocal(date),
+      title: titlePrefix ? titlePrefix + line : normalizeTitle(line, matchedText),
+      sourceLine: line,
+      reminderMinutesBefore: titlePrefix ? 1440 : 10,
+    });
+  }
+
+  const seen = new Set();
+  return items
+    .filter((item) =&gt; {
+      const key = `${item.datetime}|${item.title}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) =&gt; a.datetime.localeCompare(b.datetime));
+}
+
+function normalizeCellValue(value) {
+  return String(value ?? &quot;&quot;).replace(/\s+/g, &quot; &quot;).trim();
+}
+
+function isSpreadsheetFile(file) {
+  const mimeType = file.mimetype || &quot;&quot;;
+  const ext = path.extname(file.originalname).toLowerCase();
+  return (
+    mimeType === &quot;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&quot; ||
+    mimeType === &quot;application/vnd.ms-excel&quot; ||
+    ext === &quot;.xlsx&quot; ||
+    ext === &quot;.xls&quot; ||
+    ext === &quot;.xlsm&quot;
+  );
+}
+
+function looksLikeHeaderRow(row) {
+  const cells = row.map(normalizeCellValue).filter(Boolean);
+  const joined = cells.join(&quot; &quot;);
+  const keywordCount = [&quot;单位&quot;, &quot;内容&quot;, &quot;合同价格&quot;, &quot;合同时间&quot;, &quot;合同截止时间&quot;, &quot;巡检&quot;, &quot;维修&quot;]
+    .filter((keyword) =&gt; joined.includes(keyword)).length;
+  return cells.length &gt;= 3 &amp;&amp; keywordCount &gt;= 2;
+}
+
+function excelRowsToText(rows) {
+  const lines = [];
+  let headers = [];
+
+  for (const row of rows) {
+    const cells = row.map(normalizeCellValue);
+    const nonEmpty = cells.filter(Boolean);
+    if (!nonEmpty.length) {
+      continue;
+    }
+
+    if (looksLikeHeaderRow(cells)) {
+      headers = cells;
+      lines.push(nonEmpty.join(&quot; &quot;));
+      continue;
+    }
+
+    if (headers.length) {
+      const pairs = cells
+        .map((cell, index) =&gt; {
+          if (!cell) {
+            return &quot;&quot;;
+          }
+          const header = headers[index] || `第${index + 1}列`;
+          return `${header || `第${index + 1}列`}:${cell}`;
+        })
+        .filter(Boolean);
+
+      if (pairs.length) {
+        lines.push(pairs.join(&quot; | &quot;));
+      }
+      continue;
+    }
+
+    lines.push(nonEmpty.join(&quot; &quot;));
+  }
+
+  return lines.join(&quot;\n&quot;);
+}
+
+function parseExcelSerialDate(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric &lt; 20000 || numeric &gt; 80000) {
+    return null;
+  }
+
+  const parsed = XLSX.SSF.parse_date_code(numeric);
+  if (!parsed || !parsed.y || !parsed.m || !parsed.d) {
+    return null;
+  }
+
+  return new Date(parsed.y, parsed.m - 1, parsed.d, parsed.H || 18, parsed.M || 0, 0, 0);
+}
+
+function cellLooksDateFormatted(cell) {
+  return /[ymd年月日]/i.test(String(cell?.z || cell?.w || &quot;&quot;));
+}
+
+function parseTableDateValues(value, baseDate, options = {}) {
+  const text = normalizeCellValue(value);
+  if (!text) {
+    if (options.rawValue === undefined || !options.allowSerialDate) {
+      return [];
+    }
+
+    const serialDate = parseExcelSerialDate(options.rawValue);
+    return serialDate
+      ? [{
+          date: serialDate,
+          matchedText: String(options.rawValue),
+          note: &quot;Excel数字日期，已自动转换&quot;,
+        }]
+      : [];
+  }
+
+  const results = [];
+  const addDate = (date, matchedText, note) =&gt; {
+    if (!Number.isNaN(date.getTime())) {
+      results.push({ date, matchedText, note });
+    }
+  };
+
+  for (const matched of text.matchAll(
+    /(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})[日号]?\s*(?:(上午|中午|下午|晚上)?\s*(\d{1,2})(?:[:：点时](\d{1,2}))?)?/g
+  )) {
+    let hour = Number(matched[5] || 18);
+    const minute = Number(matched[6] || 0);
+    const period = matched[4] || &quot;&quot;;
+    if ((period === &quot;下午&quot; || period === &quot;晚上&quot;) &amp;&amp; hour &lt; 12) {
+      hour += 12;
+    }
+    const date = new Date(
+      Number(matched[1]),
+      Number(matched[2]) - 1,
+      Number(matched[3]),
+      hour,
+      minute,
+      0,
+      0
+    );
+    if (isValidDateOnly(date, matched[1], matched[2], matched[3])) {
+      addDate(date, matched[0], matched[5] ? &quot;&quot; : &quot;原文未写具体时间，默认18:00&quot;);
+    }
+  }
+
+  for (const matched of text.matchAll(
+    /(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?/g
+  )) {
+    const hour = Number(matched[4] || 18);
+    const minute = Number(matched[5] || 0);
+    const date = new Date(
+      Number(matched[1]),
+      Number(matched[2]) - 1,
+      Number(matched[3]),
+      hour,
+      minute,
+      0,
+      0
+    );
+    if (isValidDateOnly(date, matched[1], matched[2], matched[3])) {
+      addDate(date, matched[0], matched[4] ? &quot;&quot; : &quot;原文未写具体时间，默认18:00&quot;);
+    }
+  }
+
+  if (results.length) {
+    return results;
+  }
+
+  if (options.allowSerialDate) {
+    const serialDate = parseExcelSerialDate(options.rawValue ?? text);
+    if (serialDate) {
+      return [{
+        date: serialDate,
+        matchedText: text,
+        note: &quot;Excel数字日期，已自动转换&quot;,
+      }];
+    }
+  }
+
+  const rangeParsed = parseYearMonthValue(text, baseDate);
+  if (rangeParsed) {
+    const day = lastDayOfMonth(rangeParsed.year, rangeParsed.month);
+    addDate(
+      new Date(rangeParsed.year, rangeParsed.month - 1, day, 18, 0, 0, 0),
+      rangeParsed.matchedText,
+      &quot;原文只写到月份，默认该月最后一天18:00&quot;
+    );
+  }
+
+  return results;
+}
+
+function rowLabelFromPairs(pairs, fallback) {
+  const preferred = [&quot;单位&quot;, &quot;项目&quot;, &quot;公司&quot;, &quot;名称&quot;, &quot;内容&quot;, &quot;设备&quot;, &quot;合同名称&quot;];
+  const picked = preferred
+    .map((keyword) =&gt; pairs.find((pair) =&gt; pair.header.includes(keyword) &amp;&amp; pair.value))
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((pair) =&gt; `${pair.header}:${pair.value}`);
+  return picked.length ? picked.join(&quot; | &quot;) : fallback;
+}
+
+function isExcelServiceTimeHeader(header) {
+  return /(巡检时间|维修时间)/.test(String(header || &quot;&quot;));
+}
+
+function extractScheduleItemsFromExcelRows(rows, sheetName) {
+  const baseDate = new Date();
+  baseDate.setSeconds(0, 0);
+
+  const items = [];
+  let headers = [];
+  let section = &quot;&quot;;
+
+  for (const row of rows) {
+    const cells = row.map(normalizeCellValue);
+    const nonEmpty = cells.filter(Boolean);
+    if (!nonEmpty.length) {
+      continue;
+    }
+
+    if (looksLikeHeaderRow(cells)) {
+      headers = cells;
+      continue;
+    }
+
+    if (nonEmpty.length === 1 &amp;&amp; !parseTableDateValues(nonEmpty[0], baseDate).length) {
+      section = nonEmpty[0];
+      continue;
+    }
+
+    const pairs = cells
+      .map((cell, index) =&gt; ({
+        header: headers[index] || `第${index + 1}列`,
+        value: cell,
+      }))
+      .filter((pair) =&gt; pair.value);
+    const sourceLine = pairs.map((pair) =&gt; `${pair.header}:${pair.value}`).join(&quot; | &quot;);
+    const fallbackTitle = [section, sourceLine].filter(Boolean).join(&quot; | &quot;);
+    const rowLabel = rowLabelFromPairs(pairs, fallbackTitle);
+
+    for (const pair of pairs) {
+      if (!isExcelServiceTimeHeader(pair.header)) {
+        continue;
+      }
+
+      const parsedDates = parseTableDateValues(pair.value, baseDate);
+      for (const parsed of parsedDates) {
+        const note = parsed.note ? `（${parsed.note}）` : &quot;&quot;;
+        const sectionText = section ? `${section} | ` : &quot;&quot;;
+        items.push({
+          id: createId(&quot;item&quot;),
+          datetime: toIsoLocal(parsed.date),
+          title: `${sectionText}${pair.header}${note}：${pair.value} | ${rowLabel}`,
+          sourceLine: `[工作表] ${sheetName} | ${sourceLine}`,
+          reminderMinutesBefore: 10,
+        });
+      }
+    }
+  }
+
+  return items;
+}
+
+function headerSuggestsDate(header) {
+  const value = String(header || &quot;&quot;);
+  if (/(价格|金额|费用|单价|总价|合价)/.test(value)) {
+    return false;
+  }
+  return /(日期|时间|截止|到期|巡检|维修|维保|服务周期)/.test(value);
+}
+
+function extractScheduleItemsFromWorksheetCells(worksheet, rows, sheetName) {
+  if (!worksheet[&quot;!ref&quot;]) {
+    return [];
+  }
+
+  const baseDate = new Date();
+  baseDate.setSeconds(0, 0);
+
+  const range = XLSX.utils.decode_range(worksheet[&quot;!ref&quot;]);
+  const items = [];
+  let headers = [];
+  let section = &quot;&quot;;
+
+  for (let rowIndex = range.s.r; rowIndex &lt;= range.e.r; rowIndex += 1) {
+    const displayRow = rows[rowIndex] || [];
+    const cells = displayRow.map(normalizeCellValue);
+    const nonEmpty = cells.filter(Boolean);
+    if (!nonEmpty.length) {
+      continue;
+    }
+
+    if (looksLikeHeaderRow(cells)) {
+      headers = cells;
+      continue;
+    }
+
+    if (nonEmpty.length === 1 &amp;&amp; !parseTableDateValues(nonEmpty[0], baseDate).length) {
+      section = nonEmpty[0];
+      continue;
+    }
+
+    const pairs = [];
+    for (let colIndex = range.s.c; colIndex &lt;= range.e.c; colIndex += 1) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+      const cell = worksheet[address];
+      const displayValue = normalizeCellValue(
+        cell ? (cell.w !== undefined ? cell.w : cell.v) : displayRow[colIndex]
+      );
+      if (!displayValue) {
+        continue;
+      }
+      pairs.push({
+        header: headers[colIndex] || `第${colIndex + 1}列`,
+        value: displayValue,
+        cell,
+      });
+    }
+
+    const sourceLine = pairs.map((pair) =&gt; `${pair.header}:${pair.value}`).join(&quot; | &quot;);
+    const fallbackTitle = [section, sourceLine].filter(Boolean).join(&quot; | &quot;);
+    const rowLabel = rowLabelFromPairs(pairs, fallbackTitle);
+
+    for (const pair of pairs) {
+      if (!isExcelServiceTimeHeader(pair.header)) {
+        continue;
+      }
+
+      const candidates = [
+        pair.value,
+        pair.cell?.w,
+        pair.cell?.v,
+      ].filter((value, index, list) =&gt; value !== undefined &amp;&amp; list.indexOf(value) === index);
+      const allowSerialDate = headerSuggestsDate(pair.header) || cellLooksDateFormatted(pair.cell);
+
+      for (const candidate of candidates) {
+        const parsedDates = parseTableDateValues(candidate, baseDate, {
+          rawValue: pair.cell?.v,
+          allowSerialDate,
+        });
+
+        for (const parsed of parsedDates) {
+          const note = parsed.note ? `（${parsed.note}）` : &quot;&quot;;
+          const sectionText = section ? `${section} | ` : &quot;&quot;;
+          items.push({
+            id: createId(&quot;item&quot;),
+            datetime: toIsoLocal(parsed.date),
+            title: `${sectionText}${pair.header}${note}：${pair.value} | ${rowLabel}`,
+            sourceLine: `[工作表] ${sheetName} | ${sourceLine}`,
+            reminderMinutesBefore: 10,
+          });
+        }
+      }
+    }
+  }
+
+  return items;
+}
+
+function dedupeScheduleItems(items) {
+  const seen = new Set();
+  return items
+    .filter((item) =&gt; {
+      const key = `${item.datetime}|${item.title}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) =&gt; a.datetime.localeCompare(b.datetime));
+}
+
+function extractExcelTextAndItems(file) {
+  const workbook = XLSX.readFile(file.path);
+  const textParts = [];
+  const items = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      header: 1,
+      raw: false,
+      defval: &quot;&quot;,
+    });
+    textParts.push(`[工作表] ${sheetName}\n${excelRowsToText(rows)}`);
+    items.push(...extractScheduleItemsFromExcelRows(rows, sheetName));
+    items.push(...extractScheduleItemsFromWorksheetCells(workbook.Sheets[sheetName], rows, sheetName));
+  }
+
+  return {
+    text: textParts.join(&quot;\n\n&quot;),
+    items: dedupeScheduleItems(items),
+  };
+}
+
+// 文件解析模块：按不同格式抽取纯文本，后续统一走时间识别逻辑。
+async function extractTextFromFile(file) {
+  const mimeType = file.mimetype || &quot;&quot;;
+  const ext = path.extname(file.originalname).toLowerCase();
+
+  if (mimeType.startsWith(&quot;text/&quot;) || /\.(txt|md|csv)$/i.test(file.originalname)) {
+    return fs.readFile(file.path, &quot;utf8&quot;);
+  }
+
+  if (mimeType.startsWith(&quot;image/&quot;)) {
+    const result = await Tesseract.recognize(file.path, &quot;chi_sim+eng&quot;, {
+      logger: () =&gt; {},
+    });
+    return result.data.text;
+  }
+
+  if (mimeType === &quot;application/pdf&quot; || ext === &quot;.pdf&quot;) {
+    const buffer = await fs.readFile(file.path);
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      const text = (result.text || &quot;&quot;).trim();
+      if (text) {
+        return text;
+      }
+
+      // 扫描版 PDF 没有可复制文字时，渲染前几页做 OCR 兜底。
+      const screenshots = await parser.getScreenshot({
+        first: Math.min(Number(result.total || 5), 5),
+        desiredWidth: 1600,
+        imageDataUrl: false,
+        imageBuffer: true,
+      });
+      const ocrParts = [];
+      for (const page of screenshots.pages || []) {
+        const ocr = await Tesseract.recognize(Buffer.from(page.data), &quot;chi_sim+eng&quot;, {
+          logger: () =&gt; {},
+        });
+        if ((ocr.data.text || &quot;&quot;).trim()) {
+          ocrParts.push(`[PDF第${page.pageNumber}页OCR]\n${ocr.data.text}`);
+        }
+      }
+
+      const ocrText = ocrParts.join(&quot;\n\n&quot;).trim();
+      if (!ocrText) {
+        throw new Error(
+          `PDF 未提取到文字：${file.originalname}。如果这是扫描版 PDF，请尝试上传清晰图片，或换成可复制文字的 PDF。`
+        );
+      }
+      return ocrText;
+    } finally {
+      await parser.destroy();
+    }
+  }
+
+  if (
+    mimeType ===
+      &quot;application/vnd.openxmlformats-officedocument.wordprocessingml.document&quot; ||
+    ext === &quot;.docx&quot;
+  ) {
+    const result = await mammoth.extractRawText({ path: file.path });
+    return result.value;
+  }
+
+  if (mimeType === &quot;application/msword&quot; || ext === &quot;.doc&quot;) {
+    const document = await wordExtractor.extract(file.path);
+    return [
+      document.getBody(),
+      document.getHeaders(),
+      document.getFooters(),
+      document.getFootnotes(),
+      document.getEndnotes(),
+      document.getAnnotations(),
+      document.getTextboxes({ includeHeadersAndFooters: false }),
+    ]
+      .filter(Boolean)
+      .join(&quot;\n&quot;)
+      .trim();
+  }
+
+  if (isSpreadsheetFile(file)) {
+    return extractExcelTextAndItems(file).text;
+  }
+
+  throw new Error(`暂不支持文件类型：${file.originalname}`);
+}
+
+function buildAlarmFromItem(item) {
+  const eventTime = fromIsoLocal(item.datetime);
+  const remindAt = new Date(
+    eventTime.getTime() - Number(item.reminderMinutesBefore ?? 10) * 60 * 1000
+  );
+
+  return {
+    id: createId(&quot;alarm&quot;),
+    itemId: item.id,
+    recordId: item.recordId || &quot;&quot;,
+    title: item.title,
+    datetime: item.datetime,
+    sourceLine: item.sourceLine || &quot;&quot;,
+    reminderMinutesBefore: Number(item.reminderMinutesBefore ?? 10),
+    remindAt: toIsoLocal(remindAt),
+    status: &quot;scheduled&quot;,
+    createdAt: toIsoLocal(new Date()),
+    updatedAt: toIsoLocal(new Date()),
+    triggeredAt: null,
+  };
+}
+
+async function saveRecords() {
+  await writeJson(recordsFile, records);
+}
+
+async function saveAlarms() {
+  await writeJson(alarmsFile, alarms);
+}
+
+function sanitizeItem(item) {
+  return {
+    id: String(item.id || createId(&quot;item&quot;)),
+    recordId: String(item.recordId || &quot;&quot;),
+    datetime: String(item.datetime || &quot;&quot;),
+    title: String(item.title || &quot;未命名待办&quot;),
+    sourceLine: String(item.sourceLine || &quot;&quot;),
+    reminderMinutesBefore: Number(item.reminderMinutesBefore ?? 10),
+  };
+}
+
+function getLatestRecord() {
+  return records.slice().sort((a, b) =&gt; b.createdAt.localeCompare(a.createdAt))[0] || null;
+}
+
+app.get(&quot;/api/bootstrap&quot;, (req, res) =&gt; {
+  res.json({
+    alarms: alarms.slice().sort((a, b) =&gt; a.remindAt.localeCompare(b.remindAt)),
+    latestRecord: getLatestRecord(),
+    recordsCount: records.length,
+  });
+});
+
+// OCR / 时间提取模块：支持批量文件与直接粘贴文本，输出结构化待办列表。
+app.post(&quot;/api/parse&quot;, upload.array(&quot;files&quot;, 20), async (req, res) =&gt; {
+  const files = req.files || [];
+  const textParts = [];
+  const textParseParts = [];
+  const directItems = [];
+
+  try {
+    if ((req.body.text || &quot;&quot;).trim()) {
+      const manualText = &quot;[手动输入]\n&quot; + req.body.text.trim();
+      textParts.push(manualText);
+      textParseParts.push(manualText);
+    }
+
+    for (const file of files) {
+      file.originalname = normalizeUploadedFileName(file.originalname);
+
+      if (isSpreadsheetFile(file)) {
+        const extracted = extractExcelTextAndItems(file);
+        textParts.push(`[文件] ${file.originalname}\n${extracted.text}`);
+        directItems.push(...extracted.items);
+        continue;
+      }
+
+      const text = await extractTextFromFile(file);
+      const fileText = `[文件] ${file.originalname}\n${text}`;
+      textParts.push(fileText);
+      textParseParts.push(fileText);
+    }
+
+    const extractedText = textParts.join(&quot;\n\n&quot;).trim();
+    if (!extractedText) {
+      return res.status(400).json({ error: &quot;请至少上传一个文件，或粘贴一段文本内容。&quot; });
+    }
+
+    const items = dedupeScheduleItems([
+      ...directItems,
+      ...extractScheduleItems(textParseParts.join(&quot;\n\n&quot;)),
+    ]);
+    const record = {
+      id: createId(&quot;record&quot;),
+      createdAt: toIsoLocal(new Date()),
+      sourceFiles: files.map((file) =&gt; file.originalname),
+      extractedText,
+      items,
+    };
+
+    records.push(record);
+    await saveRecords();
+
+    return res.json({
+      message: files.length ? &quot;文件上传并识别成功。&quot; : &quot;文本解析成功。&quot;,
+      warning:
+        items.length === 0
+          ? &quot;未识别到有效待办时间与任务，请手动补充完整日期和时间后再导出日历提醒。&quot;
+          : null,
+      record,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || &quot;解析失败，请稍后重试。&quot; });
+  } finally {
+    await Promise.all(files.map((file) =&gt; fs.unlink(file.path).catch(() =&gt; {})));
+  }
+});
+
+app.put(&quot;/api/records/:id&quot;, async (req, res) =&gt; {
+  const record = records.find((item) =&gt; item.id === req.params.id);
+  if (!record) {
+    return res.status(404).json({ error: &quot;没有找到对应的识别记录。&quot; });
+  }
+
+  const items = Array.isArray(req.body.items) ? req.body.items.map(sanitizeItem) : [];
+  record.items = items.filter((item) =&gt; !Number.isNaN(fromIsoLocal(item.datetime).getTime()));
+  record.updatedAt = toIsoLocal(new Date());
+  await saveRecords();
+
+  return res.json({ message: &quot;提取结果已保存。&quot;, record });
+});
+
+app.get(&quot;/api/alarms&quot;, (req, res) =&gt; {
+  res.json({
+    alarms: alarms.slice().sort((a, b) =&gt; a.remindAt.localeCompare(b.remindAt)),
+  });
+});
+
+// 定时闹钟模块：将提取结果批量转换为本地闹钟记录，后续支持编辑、删除、延后和完成。
+app.post(&quot;/api/alarms/bulk&quot;, async (req, res) =&gt; {
+  const items = Array.isArray(req.body.items) ? req.body.items.map(sanitizeItem) : [];
+  if (!items.length) {
+    return res.status(400).json({ error: &quot;没有可创建闹钟的待办项。&quot; });
+  }
+
+  const created = items
+    .filter((item) =&gt; !Number.isNaN(fromIsoLocal(item.datetime).getTime()))
+    .map(buildAlarmFromItem);
+
+  alarms.push(...created);
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+
+  return res.json({
+    message: `已批量创建 ${created.length} 条闹钟。`,
+    created,
+    alarms: alarms.slice().sort((a, b) =&gt; a.remindAt.localeCompare(b.remindAt)),
+  });
+});
+
+app.delete(&quot;/api/alarms&quot;, async (req, res) =&gt; {
+  alarms = [];
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+  return res.json({ message: &quot;已清空全部闹钟。&quot;, alarms });
+});
+
+app.post(&quot;/api/alarms/clear&quot;, async (req, res) =&gt; {
+  alarms = [];
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+  return res.json({ message: &quot;已清空全部闹钟。&quot;, alarms });
+});
+
+function escapeIcsText(value) {
+  return String(value || &quot;&quot;)
+    .replace(/\\/g, &quot;\\\\&quot;)
+    .replace(/\n/g, &quot;\\n&quot;)
+    .replace(/,/g, &quot;\\,&quot;)
+    .replace(/;/g, &quot;\\;&quot;);
+}
+
+function toIcsDate(value) {
+  const date = fromIsoLocal(value);
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    &quot;T&quot;,
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    &quot;00&quot;,
+  ].join(&quot;&quot;);
+}
+
+function buildCalendarIcs(items) {
+  const nowStamp = toIcsDate(toIsoLocal(new Date()));
+  const events = items
+    .filter((item) =&gt; !Number.isNaN(fromIsoLocal(item.datetime).getTime()))
+    .map((item) =&gt; {
+      const start = toIcsDate(item.datetime);
+      const endDate = fromIsoLocal(item.datetime);
+      endDate.setMinutes(endDate.getMinutes() + 30);
+      const trigger = `-PT${Math.max(0, Number(item.reminderMinutesBefore ?? 10))}M`;
+      return [
+        &quot;BEGIN:VEVENT&quot;,
+        `UID:${item.id}@time-task-alarm-site`,
+        `DTSTAMP:${nowStamp}`,
+        `DTSTART:${start}`,
+        `DTEND:${toIcsDate(toIsoLocal(endDate))}`,
+        `SUMMARY:${escapeIcsText(item.title)}`,
+        `DESCRIPTION:${escapeIcsText(item.sourceLine)}`,
+        &quot;BEGIN:VALARM&quot;,
+        &quot;ACTION:DISPLAY&quot;,
+        `DESCRIPTION:${escapeIcsText(item.title)}`,
+        `TRIGGER:${trigger}`,
+        &quot;END:VALARM&quot;,
+        &quot;END:VEVENT&quot;,
+      ].join(&quot;\r\n&quot;);
+    });
+
+  return [
+    &quot;BEGIN:VCALENDAR&quot;,
+    &quot;VERSION:2.0&quot;,
+    &quot;PRODID:-//Time Task Alarm Site//CN&quot;,
+    &quot;X-WR-CALNAME:时间任务提醒&quot;,
+    &quot;X-WR-TIMEZONE:Asia/Shanghai&quot;,
+    &quot;CALSCALE:GREGORIAN&quot;,
+    &quot;METHOD:PUBLISH&quot;,
+    ...events,
+    &quot;END:VCALENDAR&quot;,
+  ].join(&quot;\r\n&quot;);
+}
+
+function buildAppleRemindersIcs(items) {
+  const nowStamp = toIcsDate(toIsoLocal(new Date()));
+  const todos = items
+    .filter((item) =&gt; !Number.isNaN(fromIsoLocal(item.datetime).getTime()))
+    .map((item) =&gt; {
+      const due = toIcsDate(item.datetime);
+      const trigger = `-PT${Math.max(0, Number(item.reminderMinutesBefore ?? 10))}M`;
+      return [
+        &quot;BEGIN:VTODO&quot;,
+        `UID:${item.id}@time-task-reminders-site`,
+        `DTSTAMP:${nowStamp}`,
+        `CREATED:${nowStamp}`,
+        `LAST-MODIFIED:${nowStamp}`,
+        `DUE:${due}`,
+        &quot;STATUS:NEEDS-ACTION&quot;,
+        &quot;PRIORITY:5&quot;,
+        `SUMMARY:${escapeIcsText(item.title)}`,
+        `DESCRIPTION:${escapeIcsText(item.sourceLine)}`,
+        &quot;BEGIN:VALARM&quot;,
+        &quot;ACTION:DISPLAY&quot;,
+        `DESCRIPTION:${escapeIcsText(item.title)}`,
+        `TRIGGER:${trigger}`,
+        &quot;END:VALARM&quot;,
+        &quot;END:VTODO&quot;,
+      ].join(&quot;\r\n&quot;);
+    });
+
+  return [
+    &quot;BEGIN:VCALENDAR&quot;,
+    &quot;VERSION:2.0&quot;,
+    &quot;PRODID:-//Time Task Apple Reminders Site//CN&quot;,
+    &quot;X-WR-CALNAME:时间任务提醒事项&quot;,
+    &quot;X-WR-TIMEZONE:Asia/Shanghai&quot;,
+    &quot;CALSCALE:GREGORIAN&quot;,
+    &quot;METHOD:PUBLISH&quot;,
+    ...todos,
+    &quot;END:VCALENDAR&quot;,
+  ].join(&quot;\r\n&quot;);
+}
+
+function buildShortcutReminders(items) {
+  return items
+    .filter((item) =&gt; !Number.isNaN(fromIsoLocal(item.datetime).getTime()))
+    .map((item) =&gt; {
+      const dueDate = fromIsoLocal(item.datetime);
+      const remindAt = new Date(
+        dueDate.getTime() - Number(item.reminderMinutesBefore ?? 10) * 60 * 1000
+      );
+      return {
+        title: item.title,
+        notes: item.sourceLine || &quot;&quot;,
+        dueDate: toIsoLocal(dueDate).replace(&quot;T&quot;, &quot; &quot;),
+        remindAt: toIsoLocal(remindAt).replace(&quot;T&quot;, &quot; &quot;),
+        reminderMinutesBefore: Number(item.reminderMinutesBefore ?? 10),
+      };
+    });
+}
+
+function sendCalendar(res, ics, disposition = &quot;attachment&quot;, filename = &quot;reminders.ics&quot;) {
+  res.setHeader(&quot;Content-Type&quot;, &quot;text/calendar; charset=utf-8&quot;);
+  res.setHeader(&quot;Content-Disposition&quot;, `${disposition}; filename=&quot;${filename}&quot;`);
+  res.setHeader(&quot;Cache-Control&quot;, &quot;no-store&quot;);
+  return res.send(ics);
+}
+
+app.post(&quot;/api/calendar.ics&quot;, (req, res) =&gt; {
+  const items = Array.isArray(req.body.items) ? req.body.items.map(sanitizeItem) : [];
+  if (!items.length) {
+    return res.status(400).send(&quot;没有可导出的提醒。&quot;);
+  }
+
+  const ics = buildCalendarIcs(items);
+  return sendCalendar(res, ics, &quot;attachment&quot;);
+});
+
+app.post(&quot;/api/calendar-file&quot;, (req, res) =&gt; {
+  const items = Array.isArray(req.body.items) ? req.body.items.map(sanitizeItem) : [];
+  if (!items.length) {
+    return res.status(400).json({ error: &quot;没有可导出的提醒。&quot; });
+  }
+
+  const ics = buildCalendarIcs(items);
+  const id = createId(&quot;calendar&quot;);
+  calendarFiles.set(id, {
+    ics,
+    createdAt: Date.now(),
+  });
+
+  return res.json({
+    url: `/api/calendar-files/${id}.ics`,
+  });
+});
+
+app.post(&quot;/api/apple-reminders-file&quot;, (req, res) =&gt; {
+  const items = Array.isArray(req.body.items) ? req.body.items.map(sanitizeItem) : [];
+  if (!items.length) {
+    return res.status(400).json({ error: &quot;没有可导出的提醒事项。&quot; });
+  }
+
+  const ics = buildAppleRemindersIcs(items);
+  const id = createId(&quot;apple-reminders&quot;);
+  calendarFiles.set(id, {
+    ics,
+    filename: &quot;apple-reminders.ics&quot;,
+    createdAt: Date.now(),
+  });
+
+  return res.json({
+    url: `/api/calendar-files/${id}.ics`,
+  });
+});
+
+app.post(&quot;/api/shortcut-reminders&quot;, (req, res) =&gt; {
+  const items = Array.isArray(req.body.items) ? req.body.items.map(sanitizeItem) : [];
+  const reminders = buildShortcutReminders(items);
+  if (!reminders.length) {
+    return res.status(400).json({ error: &quot;没有可导入快捷指令的提醒事项。&quot; });
+  }
+
+  const id = createId(&quot;shortcut-reminders&quot;);
+  calendarFiles.set(id, {
+    json: reminders,
+    createdAt: Date.now(),
+  });
+
+  return res.json({
+    url: `/api/shortcut-reminders/${id}.json`,
+  });
+});
+
+app.get(&quot;/api/shortcut-reminders/:id.json&quot;, (req, res) =&gt; {
+  const stored = calendarFiles.get(req.params.id);
+  if (!stored || !stored.json) {
+    return res.status(404).json({ error: &quot;快捷指令数据已过期，请重新生成。&quot; });
+  }
+
+  res.setHeader(&quot;Cache-Control&quot;, &quot;no-store&quot;);
+  return res.json({
+    reminders: stored.json,
+  });
+});
+
+app.get(&quot;/api/calendar-files/:id.ics&quot;, (req, res) =&gt; {
+  const stored = calendarFiles.get(req.params.id);
+  if (!stored) {
+    return res.status(404).send(&quot;日历文件已过期，请重新下载。&quot;);
+  }
+
+  return sendCalendar(res, stored.ics, &quot;inline&quot;, stored.filename || &quot;reminders.ics&quot;);
+});
+
+app.patch(&quot;/api/alarms/:id&quot;, async (req, res) =&gt; {
+  const alarm = alarms.find((item) =&gt; item.id === req.params.id);
+  if (!alarm) {
+    return res.status(404).json({ error: &quot;没有找到对应闹钟。&quot; });
+  }
+
+  if (req.body.title !== undefined) {
+    alarm.title = String(req.body.title || alarm.title);
+  }
+  if (req.body.datetime !== undefined) {
+    alarm.datetime = String(req.body.datetime || alarm.datetime);
+  }
+  if (req.body.reminderMinutesBefore !== undefined) {
+    alarm.reminderMinutesBefore = Number(req.body.reminderMinutesBefore ?? 10);
+  }
+
+  const remindAt = new Date(
+    fromIsoLocal(alarm.datetime).getTime() - alarm.reminderMinutesBefore * 60 * 1000
+  );
+  alarm.remindAt = toIsoLocal(remindAt);
+  alarm.updatedAt = toIsoLocal(new Date());
+
+  if (req.body.status) {
+    alarm.status = String(req.body.status);
+  }
+
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+  return res.json({ message: &quot;闹钟已更新。&quot;, alarm });
+});
+
+app.post(&quot;/api/alarms/:id/snooze&quot;, async (req, res) =&gt; {
+  const alarm = alarms.find((item) =&gt; item.id === req.params.id);
+  if (!alarm) {
+    return res.status(404).json({ error: &quot;没有找到对应闹钟。&quot; });
+  }
+
+  const current = fromIsoLocal(alarm.remindAt);
+  current.setMinutes(current.getMinutes() + 10);
+  alarm.remindAt = toIsoLocal(current);
+  alarm.status = &quot;scheduled&quot;;
+  alarm.updatedAt = toIsoLocal(new Date());
+  alarm.triggeredAt = null;
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+  return res.json({ message: &quot;闹钟已延后 10 分钟。&quot;, alarm });
+});
+
+app.post(&quot;/api/alarms/:id/complete&quot;, async (req, res) =&gt; {
+  const alarm = alarms.find((item) =&gt; item.id === req.params.id);
+  if (!alarm) {
+    return res.status(404).json({ error: &quot;没有找到对应闹钟。&quot; });
+  }
+
+  alarm.status = &quot;completed&quot;;
+  alarm.updatedAt = toIsoLocal(new Date());
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+  return res.json({ message: &quot;闹钟已标记完成。&quot;, alarm });
+});
+
+app.post(&quot;/api/alarms/:id/close&quot;, async (req, res) =&gt; {
+  const alarm = alarms.find((item) =&gt; item.id === req.params.id);
+  if (!alarm) {
+    return res.status(404).json({ error: &quot;没有找到对应闹钟。&quot; });
+  }
+
+  alarm.status = &quot;dismissed&quot;;
+  alarm.updatedAt = toIsoLocal(new Date());
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+  return res.json({ message: &quot;提醒窗口已关闭。&quot;, alarm });
+});
+
+app.delete(&quot;/api/alarms/:id&quot;, async (req, res) =&gt; {
+  const before = alarms.length;
+  alarms = alarms.filter((item) =&gt; item.id !== req.params.id);
+  if (alarms.length === before) {
+    return res.status(404).json({ error: &quot;没有找到对应闹钟。&quot; });
+  }
+
+  await saveAlarms();
+  emitEvent(&quot;alarms-updated&quot;, alarms);
+  return res.json({ message: &quot;闹钟已删除。&quot; });
+});
+
+app.use((error, req, res, next) =&gt; {
+  console.error(&quot;Unhandled request error:&quot;, error);
+  res.status(500).json({
+    error: error &amp;&amp; error.message ? error.message : &quot;服务器内部错误&quot;,
+  });
+});
+
+app.get(&quot;/api/events&quot;, (req, res) =&gt; {
+  res.setHeader(&quot;Content-Type&quot;, &quot;text/event-stream&quot;);
+  res.setHeader(&quot;Cache-Control&quot;, &quot;no-cache&quot;);
+  res.setHeader(&quot;Connection&quot;, &quot;keep-alive&quot;);
+  res.flushHeaders();
+
+  sseClients.add(res);
+  res.write(`event: init\ndata: ${JSON.stringify({ ok: true })}\n\n`);
+
+  req.on(&quot;close&quot;, () =&gt; {
+    sseClients.delete(res);
+  });
+});
+
+setInterval(async () =&gt; {
+  let changed = false;
+  const now = Date.now();
+
+  for (const alarm of alarms) {
+    if (alarm.status !== &quot;scheduled&quot;) {
+      continue;
+    }
+
+    if (fromIsoLocal(alarm.remindAt).getTime() &lt;= now) {
+      alarm.status = &quot;triggered&quot;;
+      alarm.triggeredAt = toIsoLocal(new Date());
+      changed = true;
+      emitEvent(&quot;alarm-triggered&quot;, alarm);
+    }
+  }
+
+  if (changed) {
+    await saveAlarms();
+    emitEvent(&quot;alarms-updated&quot;, alarms);
+  }
+}, 5000);
+
+Promise.all([
+  readJson(alarmsFile, []),
+  readJson(recordsFile, []),
+]).then(([savedAlarms, savedRecords]) =&gt; {
+  alarms = savedAlarms;
+  records = savedRecords;
+  app.listen(port, &quot;0.0.0.0&quot;, () =&gt; {
+    console.log(`Time task alarm site listening on http://0.0.0.0:${port}`);
+  });
+});
+</pre>
+      </section>
+    </main>
+  </body>
+</html>

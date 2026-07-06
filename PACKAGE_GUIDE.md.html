@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PACKAGE_GUIDE.md - 网站源码 HTML 导出</title>
+    <style>
+:root {
+  --bg: #f3f7f6;
+  --card: #ffffff;
+  --border: #cfe0dc;
+  --text: #10201d;
+  --muted: #536964;
+  --accent: #0f766e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eefbf7, #f4f7f6 40%, #edf4f2 100%);
+  color: var(--text);
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+main {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+h1, h2, p { margin-top: 0; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 12px 30px rgba(16, 32, 29, 0.06);
+}
+.list {
+  display: grid;
+  gap: 12px;
+}
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  background: #fbfdfc;
+}
+.item:hover { border-color: var(--accent); }
+.meta { color: var(--muted); font-size: 14px; }
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+small { color: var(--muted); }
+@media (max-width: 720px) {
+  .topbar, .item { display: block; }
+  .item span:last-child { margin-top: 8px; display: block; }
+}
+</style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <a class="back" href="index.html">返回源码目录</a>
+          <h1>PACKAGE_GUIDE.md</h1>
+          <small>大小：1264 字节</small>
+        </div>
+      </div>
+      <section class="card">
+        <pre># 时间任务提取与日历提醒助手 - 打包说明
+
+这是当前网站项目的可部署源码包。
+
+## 本地运行
+
+先安装依赖：
+
+```bash
+npm install
+```
+
+再启动网站：
+
+```bash
+npm start
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:3000
+```
+
+## 部署到免费公网
+
+推荐使用 Render 免费版。
+
+1. 把本项目上传到 GitHub。
+2. 打开 `https://render.com`。
+3. 选择 `New` -&gt; `Blueprint`。
+4. 连接 GitHub 仓库。
+5. 选择这个项目仓库。
+6. Render 会自动读取 `render.yaml`。
+7. 部署完成后，Render 会生成一个 `onrender.com` 公网链接。
+
+## 当前主要功能
+
+- 上传 Word、PDF、Excel、图片，或直接粘贴文字。
+- 自动提取时间安排。
+- Excel 目前只识别 `巡检时间` 和 `维修时间` 两类列。
+- 可设置统一提前提醒时间，也可给每条日程单独设置。
+- 生成 `.ics` 日历文件，导入手机日历后由手机系统提醒。
+
+## 注意事项
+
+- 免费公网平台可能会休眠，第一次打开可能较慢。
+- 当前版本使用日历提醒，不是安卓系统闹钟。
+- 手机导入日历是否弹出导入界面，取决于手机浏览器和日历 App。
+- 如果部署后 `/healthz` 可以打开，说明后端服务运行正常。
+</pre>
+      </section>
+    </main>
+  </body>
+</html>

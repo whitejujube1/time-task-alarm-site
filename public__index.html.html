@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>public/index.html - 网站源码 HTML 导出</title>
+    <style>
+:root {
+  --bg: #f3f7f6;
+  --card: #ffffff;
+  --border: #cfe0dc;
+  --text: #10201d;
+  --muted: #536964;
+  --accent: #0f766e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eefbf7, #f4f7f6 40%, #edf4f2 100%);
+  color: var(--text);
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+main {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+h1, h2, p { margin-top: 0; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 12px 30px rgba(16, 32, 29, 0.06);
+}
+.list {
+  display: grid;
+  gap: 12px;
+}
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  background: #fbfdfc;
+}
+.item:hover { border-color: var(--accent); }
+.meta { color: var(--muted); font-size: 14px; }
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+small { color: var(--muted); }
+@media (max-width: 720px) {
+  .topbar, .item { display: block; }
+  .item span:last-child { margin-top: 8px; display: block; }
+}
+</style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <a class="back" href="index.html">返回源码目录</a>
+          <h1>public/index.html</h1>
+          <small>大小：19358 字节</small>
+        </div>
+      </div>
+      <section class="card">
+        <pre>&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+  &lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot; /&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
+    &lt;title&gt;时间任务提取与日历提醒助手&lt;/title&gt;
+    &lt;meta name=&quot;theme-color&quot; content=&quot;#0f766e&quot; /&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;/styles.css?v=debug1&quot; /&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;main class=&quot;debug-shell&quot;&gt;
+      &lt;h1&gt;时间任务提取与日历提醒助手&lt;/h1&gt;
+      &lt;p class=&quot;intro&quot;&gt;上传文件或拍照，识别后导入手机日历。&lt;/p&gt;
+
+      &lt;section class=&quot;panel&quot;&gt;
+        &lt;h2&gt;操作区&lt;/h2&gt;
+        &lt;div class=&quot;button-row&quot;&gt;
+          &lt;button type=&quot;button&quot; id=&quot;parse-btn&quot;&gt;1. 开始识别时间安排&lt;/button&gt;
+          &lt;button type=&quot;button&quot; id=&quot;export-calendar-btn&quot;&gt;2. 下载手机日历提醒&lt;/button&gt;
+        &lt;/div&gt;
+        &lt;label class=&quot;field compact-field&quot;&gt;
+          &lt;span&gt;提前多久提醒&lt;/span&gt;
+          &lt;select id=&quot;reminder-before&quot;&gt;
+            &lt;option value=&quot;10&quot;&gt;提前 10 分钟&lt;/option&gt;
+            &lt;option value=&quot;30&quot;&gt;提前 30 分钟&lt;/option&gt;
+            &lt;option value=&quot;60&quot;&gt;提前 1 小时&lt;/option&gt;
+            &lt;option value=&quot;1440&quot;&gt;提前 1 天&lt;/option&gt;
+            &lt;option value=&quot;2102400&quot;&gt;提前 4 年&lt;/option&gt;
+          &lt;/select&gt;
+        &lt;/label&gt;
+        &lt;div id=&quot;status&quot; class=&quot;status-box&quot;&gt;页面正在加载脚本...&lt;/div&gt;
+        &lt;div id=&quot;permission-tip&quot; class=&quot;hidden&quot;&gt;当前版本使用手机日历提醒，不需要网页通知权限。&lt;/div&gt;
+        &lt;div id=&quot;debug-box&quot; class=&quot;hidden&quot;&gt;调试信息会显示在这里。&lt;/div&gt;
+        &lt;div id=&quot;entry-tip&quot; class=&quot;hidden&quot;&gt;当前网站已通过公网服务访问，可以直接上传测试。&lt;/div&gt;
+        &lt;div id=&quot;reminder-tip&quot; class=&quot;hidden&quot;&gt;识别完成后导入手机日历。&lt;/div&gt;
+      &lt;/section&gt;
+
+      &lt;section class=&quot;panel&quot;&gt;
+        &lt;h2&gt;输入区&lt;/h2&gt;
+        &lt;label class=&quot;field&quot;&gt;
+          &lt;span&gt;选择文件（支持 Word、PDF、Excel、图片）&lt;/span&gt;
+          &lt;input id=&quot;file-input&quot; type=&quot;file&quot; multiple accept=&quot;.txt,.md,.csv,.doc,.docx,.pdf,.xlsx,.xls,.xlsm,image/*&quot; /&gt;
+        &lt;/label&gt;
+
+        &lt;label class=&quot;field&quot;&gt;
+          &lt;span&gt;或者拍照上传&lt;/span&gt;
+          &lt;input id=&quot;camera-input&quot; type=&quot;file&quot; accept=&quot;image/*&quot; capture=&quot;environment&quot; /&gt;
+        &lt;/label&gt;
+
+        &lt;div id=&quot;file-list&quot; class=&quot;plain-box&quot;&gt;当前没有选择文件。&lt;/div&gt;
+
+        &lt;label class=&quot;field&quot;&gt;
+          &lt;span&gt;直接粘贴文字（可选）&lt;/span&gt;
+          &lt;textarea
+            id=&quot;text-input&quot;
+            rows=&quot;6&quot;
+            placeholder=&quot;例如：&amp;#10;6月20日 09:30 产品评审会&amp;#10;明天下午 3:00 提交报价方案&quot;
+          &gt;&lt;/textarea&gt;
+        &lt;/label&gt;
+      &lt;/section&gt;
+
+      &lt;section class=&quot;two-col&quot;&gt;
+        &lt;section class=&quot;panel&quot;&gt;
+          &lt;h2&gt;识别结果&lt;/h2&gt;
+          &lt;div id=&quot;record-meta&quot; class=&quot;plain-box&quot;&gt;识别来源与数量会显示在这里。&lt;/div&gt;
+          &lt;div id=&quot;schedule-list&quot; class=&quot;plain-box&quot;&gt;还没有识别结果。&lt;/div&gt;
+          &lt;pre id=&quot;extracted-text&quot; class=&quot;raw-box&quot;&gt;原始识别文本会显示在这里。&lt;/pre&gt;
+        &lt;/section&gt;
+
+        &lt;section class=&quot;panel&quot;&gt;
+          &lt;h2&gt;日历提醒预览&lt;/h2&gt;
+          &lt;div id=&quot;alarm-meta&quot; class=&quot;plain-box&quot;&gt;识别完成后，这里会显示准备导入手机日历的提醒。&lt;/div&gt;
+          &lt;div id=&quot;alarm-list&quot; class=&quot;plain-box&quot;&gt;还没有提醒。&lt;/div&gt;
+        &lt;/section&gt;
+      &lt;/section&gt;
+
+      &lt;div id=&quot;toast&quot; class=&quot;toast hidden&quot;&gt;&lt;/div&gt;
+    &lt;/main&gt;
+
+    &lt;script&gt;
+      (function () {
+        var elements = {
+          parseBtn: document.getElementById(&quot;parse-btn&quot;),
+          exportCalendarBtn: document.getElementById(&quot;export-calendar-btn&quot;),
+          fileInput: document.getElementById(&quot;file-input&quot;),
+          cameraInput: document.getElementById(&quot;camera-input&quot;),
+          textInput: document.getElementById(&quot;text-input&quot;),
+          reminderBefore: document.getElementById(&quot;reminder-before&quot;),
+          fileList: document.getElementById(&quot;file-list&quot;),
+          status: document.getElementById(&quot;status&quot;),
+          permissionTip: document.getElementById(&quot;permission-tip&quot;),
+          recordMeta: document.getElementById(&quot;record-meta&quot;),
+          scheduleList: document.getElementById(&quot;schedule-list&quot;),
+          extractedText: document.getElementById(&quot;extracted-text&quot;),
+          alarmList: document.getElementById(&quot;alarm-list&quot;),
+          alarmMeta: document.getElementById(&quot;alarm-meta&quot;),
+          toast: document.getElementById(&quot;toast&quot;),
+          debugBox: document.getElementById(&quot;debug-box&quot;),
+          entryTip: document.getElementById(&quot;entry-tip&quot;),
+          reminderTip: document.getElementById(&quot;reminder-tip&quot;)
+        };
+
+        var state = {
+          selectedFiles: [],
+          currentItems: [],
+          currentRecordId: null,
+          toastTimer: null
+        };
+
+        function setStatus(message) {
+          elements.status.textContent = message;
+        }
+
+        function showToast(message) {
+          clearTimeout(state.toastTimer);
+          elements.toast.textContent = message;
+          elements.toast.classList.remove(&quot;hidden&quot;);
+          state.toastTimer = setTimeout(function () {
+            elements.toast.classList.add(&quot;hidden&quot;);
+          }, 2200);
+        }
+
+        function setDebug(message) {
+          elements.debugBox.textContent = message;
+        }
+
+        function formatDateTime(value) {
+          return String(value || &quot;&quot;).replace(&quot;T&quot;, &quot; &quot;);
+        }
+
+        function currentReminderMinutes() {
+          return Number(elements.reminderBefore.value || 10);
+        }
+
+        function applyReminderMinutes(items) {
+          return items.map(function (item) {
+            var copy = Object.assign({}, item);
+            copy.reminderMinutesBefore = currentReminderMinutes();
+            return copy;
+          });
+        }
+
+        function reminderOptions(selected) {
+          var options = [
+            [10, &quot;提前 10 分钟&quot;],
+            [30, &quot;提前 30 分钟&quot;],
+            [60, &quot;提前 1 小时&quot;],
+            [1440, &quot;提前 1 天&quot;],
+            [2102400, &quot;提前 4 年&quot;]
+          ];
+          return options.map(function (option) {
+            return &quot;&lt;option value=\&quot;&quot; + option[0] + &quot;\&quot;&quot; + (Number(selected) === option[0] ? &quot; selected&quot; : &quot;&quot;) + &quot;&gt;&quot; + option[1] + &quot;&lt;/option&gt;&quot;;
+          }).join(&quot;&quot;);
+        }
+
+        function requestJson(options) {
+          return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open(options.method || &quot;GET&quot;, options.url, true);
+
+            if (options.headers) {
+              Object.keys(options.headers).forEach(function (key) {
+                xhr.setRequestHeader(key, options.headers[key]);
+              });
+            }
+
+            xhr.onload = function () {
+              var data = {};
+              try {
+                data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+              } catch (error) {
+                reject(new Error(
+                  &quot;服务返回内容无法解析，原始内容前 200 字符：&quot; +
+                  String(xhr.responseText || &quot;&quot;).slice(0, 200)
+                ));
+                return;
+              }
+
+              resolve({
+                ok: xhr.status &gt;= 200 &amp;&amp; xhr.status &lt; 300,
+                status: xhr.status,
+                data: data
+              });
+            };
+
+            xhr.onerror = function () {
+              reject(new Error(&quot;网络请求失败，当前浏览器/代理环境可能拦截了请求&quot;));
+            };
+
+            xhr.send(options.body || null);
+          });
+        }
+
+        function checkBackendVersion() {
+          requestJson({ url: &quot;/healthz&quot; })
+            .then(function (result) {
+              if (!result.data.version) {
+                setDebug(&quot;后端仍是旧版本：请在 PopX 部署服务里重启服务，否则 Excel 新识别逻辑不会生效。&quot;);
+                elements.entryTip.textContent =
+                  &quot;当前网页已更新，但后端接口还没重启到新版。请重启部署服务后再测试 Excel。&quot;;
+                return;
+              }
+              setDebug(&quot;后端版本：&quot; + result.data.version + &quot;，Excel 表格直读逻辑已启用。&quot;);
+            })
+            .catch(function () {
+              setDebug(&quot;无法检查后端版本，请确认服务正在运行。&quot;);
+            });
+        }
+
+        function downloadBlob(url, body, filename) {
+          return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open(&quot;POST&quot;, url, true);
+            xhr.responseType = &quot;blob&quot;;
+            xhr.setRequestHeader(&quot;Content-Type&quot;, &quot;application/json&quot;);
+            xhr.onload = function () {
+              if (xhr.status &lt; 200 || xhr.status &gt;= 300) {
+                reject(new Error(&quot;导出失败，状态码：&quot; + xhr.status));
+                return;
+              }
+
+              var blobUrl = URL.createObjectURL(xhr.response);
+              var link = document.createElement(&quot;a&quot;);
+              link.href = blobUrl;
+              link.download = filename;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(function () {
+                URL.revokeObjectURL(blobUrl);
+              }, 1000);
+              resolve();
+            };
+            xhr.onerror = function () {
+              reject(new Error(&quot;导出失败，网络请求没有完成&quot;));
+            };
+            xhr.send(JSON.stringify(body));
+          });
+        }
+
+        function renderFiles() {
+          if (!state.selectedFiles.length) {
+            elements.fileList.textContent = &quot;当前没有选择文件。&quot;;
+            return;
+          }
+
+          elements.fileList.innerHTML = state.selectedFiles
+            .map(function (file) {
+              return &quot;• &quot; + file.name + &quot; (&quot; + Math.max(1, Math.round(file.size / 1024)) + &quot; KB)&quot;;
+            })
+            .join(&quot;&lt;br&gt;&quot;);
+        }
+
+        function collectFiles() {
+          var files = []
+            .concat(Array.prototype.slice.call(elements.fileInput.files || []))
+            .concat(Array.prototype.slice.call(elements.cameraInput.files || []));
+          state.selectedFiles = files;
+          renderFiles();
+        }
+
+        function renderItems() {
+          if (!state.currentItems.length) {
+            elements.scheduleList.textContent =
+              &quot;还没有识别结果。若文件里只有“2026年6月 日”这种缺少具体日期的内容，系统不会硬猜时间，请在文本框补充完整日期后再识别。&quot;;
+            return;
+          }
+
+          elements.scheduleList.innerHTML = state.currentItems
+            .map(function (item, index) {
+              return (
+                &quot;&lt;div class=\&quot;schedule-item\&quot;&gt;&quot; +
+                &quot;&lt;div&gt;&lt;strong&gt;&quot; + (index + 1) + &quot;. &quot; + formatDateTime(item.datetime) + &quot;&lt;/strong&gt;&lt;br&gt;&quot; + item.title + &quot;&lt;/div&gt;&quot; +
+                &quot;&lt;label class=\&quot;inline-select\&quot;&gt;提醒时间 &lt;select class=\&quot;item-reminder\&quot; data-index=\&quot;&quot; + index + &quot;\&quot;&gt;&quot; + reminderOptions(item.reminderMinutesBefore) + &quot;&lt;/select&gt;&lt;/label&gt;&quot; +
+                &quot;&lt;/div&gt;&quot;
+              );
+            })
+            .join(&quot;&quot;);
+        }
+
+        function renderAlarms(list) {
+          var alarms = list || [];
+          elements.alarmMeta.textContent = &quot;待导入手机日历：&quot; + alarms.length + &quot; 条&quot;;
+
+          if (!alarms.length) {
+            elements.alarmList.textContent = &quot;还没有提醒。&quot;;
+            return;
+          }
+
+          elements.alarmList.innerHTML = alarms
+            .map(function (alarm, index) {
+              return (
+                &quot;&lt;div class=\&quot;schedule-item\&quot;&gt;&quot; +
+                &quot;&lt;div&gt;&lt;strong&gt;&quot; + (index + 1) + &quot;. &quot; + alarm.title + &quot;&lt;/strong&gt;&lt;br&gt;&quot; +
+                &quot;事项时间：&quot; + formatDateTime(alarm.datetime) + &quot;&lt;br&gt;&quot; +
+                &quot;提醒时间：&quot; + formatDateTime(alarm.remindAt) + &quot;&lt;/div&gt;&quot; +
+                &quot;&lt;/div&gt;&quot;
+              );
+            })
+            .join(&quot;&quot;);
+        }
+
+        function buildPreviewAlarms(items) {
+          return items.map(function (item) {
+            var parts = String(item.datetime).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+            var eventTime = parts
+              ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), Number(parts[4]), Number(parts[5]))
+              : new Date(item.datetime);
+            var reminder = new Date(eventTime.getTime() - Number(item.reminderMinutesBefore || 10) * 60 * 1000);
+            var year = reminder.getFullYear();
+            var month = String(reminder.getMonth() + 1).padStart(2, &quot;0&quot;);
+            var day = String(reminder.getDate()).padStart(2, &quot;0&quot;);
+            var hour = String(reminder.getHours()).padStart(2, &quot;0&quot;);
+            var minute = String(reminder.getMinutes()).padStart(2, &quot;0&quot;);
+            return {
+              title: item.title,
+              status: &quot;待导入&quot;,
+              datetime: item.datetime,
+              remindAt: year + &quot;-&quot; + month + &quot;-&quot; + day + &quot;T&quot; + hour + &quot;:&quot; + minute
+            };
+          });
+        }
+
+        function handleParse() {
+          showToast(&quot;开始识别&quot;);
+          setStatus(&quot;你点击了：开始识别时间安排&quot;);
+          setDebug(&quot;准备上传文件并请求 /api/parse&quot;);
+          elements.parseBtn.disabled = true;
+          elements.parseBtn.textContent = &quot;正在识别...&quot;;
+
+          collectFiles();
+          renderAlarms([]);
+          elements.alarmMeta.textContent = &quot;正在识别，本次文件尚未生成日历提醒。&quot;;
+          var text = (elements.textInput.value || &quot;&quot;).trim();
+          if (!state.selectedFiles.length &amp;&amp; !text) {
+            setStatus(&quot;识别失败：请先上传文件、拍照或粘贴文本。&quot;);
+            elements.parseBtn.disabled = false;
+            elements.parseBtn.textContent = &quot;1. 开始识别时间安排&quot;;
+            return;
+          }
+
+          var formData = new FormData();
+          state.selectedFiles.forEach(function (file) {
+            formData.append(&quot;files&quot;, file);
+          });
+          if (text) {
+            formData.append(&quot;text&quot;, text);
+          }
+
+          requestJson({
+            url: &quot;/api/parse&quot;,
+            method: &quot;POST&quot;,
+            body: formData
+          })
+            .then(function (result) {
+              if (!result.ok) {
+                throw new Error(result.data.error || &quot;解析失败&quot;);
+              }
+
+              state.currentRecordId = result.data.record.id;
+              state.currentItems = applyReminderMinutes(result.data.record.items || []).map(function (item) {
+                item.recordId = result.data.record.id;
+                return item;
+              });
+              var sourceNames = (result.data.record.sourceFiles || []).length
+                ? result.data.record.sourceFiles.join(&quot;、&quot;)
+                : &quot;手动输入文字&quot;;
+              elements.recordMeta.textContent =
+                &quot;识别来源：&quot; + sourceNames + &quot;；识别数量：&quot; + state.currentItems.length + &quot; 条&quot;;
+              elements.extractedText.textContent = result.data.record.extractedText || &quot;&quot;;
+              renderItems();
+              setStatus(&quot;识别完成，共识别 &quot; + state.currentItems.length + &quot; 条时间安排&quot;);
+              setDebug(result.data.warning || &quot;上传与解析成功，接口返回正常&quot;);
+              elements.alarmMeta.textContent =
+                state.currentItems.length
+                  ? &quot;已识别 &quot; + state.currentItems.length + &quot; 条，下面是待导入日历的提醒预览。请点击“下载手机日历提醒”。&quot;
+                  : &quot;本次没有识别到可导入日历的提醒。请检查原文是否有完整日期，或在文本框补充完整时间后再识别。&quot;;
+              renderAlarms(buildPreviewAlarms(state.currentItems));
+              showToast(&quot;识别完成&quot;);
+            })
+            .catch(function (error) {
+              setStatus(&quot;识别失败：&quot; + error.message);
+              setDebug(&quot;解析阶段异常：&quot; + error.message);
+            })
+            .finally(function () {
+              elements.parseBtn.disabled = false;
+              elements.parseBtn.textContent = &quot;1. 开始识别时间安排&quot;;
+            });
+        }
+
+        function handleExportCalendar() {
+          if (!state.currentItems.length) {
+            setStatus(&quot;导出失败：当前没有识别结果，无法生成日历提醒。&quot;);
+            return;
+          }
+
+          setStatus(&quot;正在生成手机日历提醒文件...&quot;);
+          requestJson({
+            url: &quot;/api/calendar-file&quot;,
+            method: &quot;POST&quot;,
+            headers: {
+              &quot;Content-Type&quot;: &quot;application/json&quot;
+            },
+            body: JSON.stringify({ items: state.currentItems })
+          })
+            .then(function (result) {
+              if (!result.ok) {
+                throw new Error(result.data.error || &quot;生成日历文件失败&quot;);
+              }
+              setStatus(&quot;日历文件已生成，正在打开手机日历导入链接...&quot;);
+              setDebug(&quot;如果手机没有自动弹出日历导入，请在下载记录中打开 reminders.ics。&quot;);
+              showToast(&quot;正在打开日历文件&quot;);
+              window.location.href = result.data.url;
+            })
+            .catch(function (error) {
+              setStatus(&quot;导出失败：&quot; + error.message);
+            });
+        }
+
+        function bind() {
+          elements.parseBtn.addEventListener(&quot;click&quot;, handleParse);
+          elements.exportCalendarBtn.addEventListener(&quot;click&quot;, handleExportCalendar);
+          elements.reminderBefore.addEventListener(&quot;change&quot;, function () {
+            state.currentItems = applyReminderMinutes(state.currentItems);
+            renderItems();
+            renderAlarms(buildPreviewAlarms(state.currentItems));
+            setStatus(&quot;提醒提前时间已更新，下载日历文件时会使用新设置。&quot;);
+          });
+          elements.scheduleList.addEventListener(&quot;change&quot;, function (event) {
+            if (!event.target.classList.contains(&quot;item-reminder&quot;)) {
+              return;
+            }
+            var index = Number(event.target.dataset.index);
+            if (!state.currentItems[index]) {
+              return;
+            }
+            state.currentItems[index].reminderMinutesBefore = Number(event.target.value);
+            renderItems();
+            renderAlarms(buildPreviewAlarms(state.currentItems));
+            setStatus(&quot;第 &quot; + (index + 1) + &quot; 条提醒时间已单独更新。&quot;);
+          });
+
+          elements.fileInput.addEventListener(&quot;change&quot;, function () {
+            collectFiles();
+            setStatus(&quot;文件选择完成，可以开始识别。&quot;);
+          });
+
+          elements.cameraInput.addEventListener(&quot;change&quot;, function () {
+            collectFiles();
+            setStatus(&quot;拍照文件选择完成，可以开始识别。&quot;);
+          });
+        }
+
+        bind();
+        window.__APP_BOOTED__ = true;
+        setStatus(&quot;页面已准备好：上传文件后点击“开始识别时间安排”。&quot;);
+        elements.entryTip.textContent =
+          &quot;当前入口可用：&quot; + location.origin + &quot;。识别后请下载日历提醒文件导入手机日历。&quot;;
+        setDebug(&quot;页面初始化完成，当前主流程为：识别文件 → 下载日历提醒。&quot;);
+        checkBackendVersion();
+        showToast(&quot;页面已加载&quot;);
+      })();
+    &lt;/script&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+</pre>
+      </section>
+    </main>
+  </body>
+</html>

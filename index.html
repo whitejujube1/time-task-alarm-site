@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>网站源码 HTML 导出</title>
+    <style>
+:root {
+  --bg: #f3f7f6;
+  --card: #ffffff;
+  --border: #cfe0dc;
+  --text: #10201d;
+  --muted: #536964;
+  --accent: #0f766e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eefbf7, #f4f7f6 40%, #edf4f2 100%);
+  color: var(--text);
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+main {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+h1, h2, p { margin-top: 0; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 12px 30px rgba(16, 32, 29, 0.06);
+}
+.list {
+  display: grid;
+  gap: 12px;
+}
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  background: #fbfdfc;
+}
+.item:hover { border-color: var(--accent); }
+.meta { color: var(--muted); font-size: 14px; }
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+small { color: var(--muted); }
+@media (max-width: 720px) {
+  .topbar, .item { display: block; }
+  .item span:last-child { margin-top: 8px; display: block; }
+}
+</style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>网站源码 HTML 导出</h1>
+          <p>这里整理的是当前网站项目的主要源码 HTML 页面。直接打开这个文件夹中的 <code>index.html</code>，就可以浏览全部源码。</p>
+        </div>
+      </div>
+      <section class="card">
+        <h2>源码目录</h2>
+        <div class="list">
+          <a class="item" href=".gitignore.html"><span>.gitignore</span><span class="meta">104 字节</span></a><a class="item" href="package.json.html"><span>package.json</span><span class="meta">793 字节</span></a><a class="item" href="package-lock.json.html"><span>package-lock.json</span><span class="meta">101877 字节</span></a><a class="item" href="server.js.html"><span>server.js</span><span class="meta">45735 字节</span></a><a class="item" href="render.yaml.html"><span>render.yaml</span><span class="meta">316 字节</span></a><a class="item" href="capacitor.config.json.html"><span>capacitor.config.json</span><span class="meta">103 字节</span></a><a class="item" href="README.md.html"><span>README.md</span><span class="meta">3309 字节</span></a><a class="item" href="DEPLOY.md.html"><span>DEPLOY.md</span><span class="meta">968 字节</span></a><a class="item" href="PACKAGE_GUIDE.md.html"><span>PACKAGE_GUIDE.md</span><span class="meta">1264 字节</span></a><a class="item" href="APPLE_SHORTCUT.md.html"><span>APPLE_SHORTCUT.md</span><span class="meta">720 字节</span></a><a class="item" href="public__index.html.html"><span>public/index.html</span><span class="meta">19358 字节</span></a><a class="item" href="public__styles.css.html"><span>public/styles.css</span><span class="meta">2628 字节</span></a><a class="item" href="public__app.js.html"><span>public/app.js</span><span class="meta">6879 字节</span></a><a class="item" href="public__sw.js.html"><span>public/sw.js</span><span class="meta">473 字节</span></a><a class="item" href="public__manifest.webmanifest.html"><span>public/manifest.webmanifest</span><span class="meta">446 字节</span></a><a class="item" href="public__icon.svg.html"><span>public/icon.svg</span><span class="meta">567 字节</span></a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
