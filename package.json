@@ -1,0 +1,32 @@
+{
+  "name": "12345",
+  "version": "1.0.0",
+  "description": "Upload files or images, extract schedule items, and create reminder drafts.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "cap:sync": "npx cap sync android",
+    "cap:copy": "npx cap copy android",
+    "android:open": "npx cap open android"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "express": "^5.2.1",
+    "localtunnel": "^2.0.2",
+    "mammoth": "^1.12.0",
+    "multer": "^2.2.0",
+    "pdf-parse": "^2.4.5",
+    "tesseract.js": "^7.0.0",
+    "word-extractor": "^1.0.4",
+    "xlsx": "^0.18.5"
+  }
+}

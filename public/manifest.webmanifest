@@ -1,0 +1,18 @@
+{
+  "name": "时间安排与闹钟助手",
+  "short_name": "闹钟助手",
+  "description": "上传文件、图片、PDF 或 Word，自动提取时间安排并生成提醒。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4efe6",
+  "theme_color": "#d6693f",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

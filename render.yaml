@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: time-task-alarm-site
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: on
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATA_DIR
+        value: /tmp/time-task-data
